@@ -28,6 +28,7 @@ struct Schedule
   int lastInstance;
   int noOfProcesses;
   int insertedProcesses;
+  int quota;
   Process **processes;
 
   Schedule(string mode, string schedulePolicy, int lastInstance, int noOfProcesses);

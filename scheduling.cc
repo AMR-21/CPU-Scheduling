@@ -28,13 +28,14 @@ Schedule::Schedule(string mode, string schedulePolicy, int lastInstance, int noO
   Schedule::lastInstance = lastInstance;
   Schedule::noOfProcesses = noOfProcesses;
   Schedule::insertedProcesses = 0;
+  Schedule::quota = 1;
 
   if (schedulePolicy == "1")
     Schedule::policyName = "FCFS";
-  else if (schedulePolicy == "2-1")
-    Schedule::policyName = "RR-1";
-  else if (schedulePolicy == "2-4")
-    Schedule::policyName = "RR-4";
+  else if (schedulePolicy[0] == '2')
+    Schedule::policyName = "RR" + schedulePolicy.substr(1, schedulePolicy.length() - 1);
+  // else if (schedulePolicy == "2-4")
+  // Schedule::policyName = "RR-4";
   else if (schedulePolicy == "3")
     Schedule::policyName = "SPN";
   else if (schedulePolicy == "4")
@@ -312,7 +313,7 @@ void FCFS()
   }
 }
 
-void RR(int quota)
+void RR()
 {
   for (int j = 0; j < schedule->lastInstance; j++)
   {
@@ -325,7 +326,7 @@ void RR(int quota)
       f->service--;
       f->quota++;
 
-      if (f->quota == quota || !f->service)
+      if (f->quota == schedule->quota || !f->service)
       {
         f->quota = 0;
         q.pop();
@@ -469,6 +470,11 @@ void init()
   else
   {
     schedule = new Schedule(tokens[0], tokens[1], stoi(tokens[2]), stoi(tokens[3]));
+
+    // Round-robin quota
+    if (tokens[1][0] == '2')
+      schedule->quota = stoi(tokens[1].substr(2, tokens[1].length() - 1));
+
     schedules.push_back(schedule);
   }
 
@@ -480,6 +486,7 @@ void init()
 
       stringstream stream(tokens[i]);
       int j = 0;
+
       while (getline(stream, token, ','))
         args[j++] = token;
 
@@ -495,6 +502,10 @@ void init()
     for (string policy : polTokens)
     {
       schedule = new Schedule(tokens[0], policy, stoi(tokens[2]), stoi(tokens[3]));
+
+      if (policy[0] == '2')
+        schedule->quota = stoi(policy.substr(2, policy.length() - 1));
+
       for (int i = 4; i < tokens.size(); i++)
       {
         string args[3], token;
@@ -526,10 +537,8 @@ int main()
 
     if (s->policyName == "FCFS")
       FCFS();
-    else if (s->policyName == "RR-1")
-      RR(1);
-    else if (s->policyName == "RR-4")
-      RR(4);
+    else if (s->policyName.substr(0, 2) == "RR")
+      RR();
     else if (s->policyName == "SPN")
       SPN();
     else if (s->policyName == "SRT")
