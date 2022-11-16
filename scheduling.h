@@ -1,6 +1,8 @@
-#ifndef scheduling_h
-#define scheduling_h
+#ifndef SCHEDULING_H
+#define SCHEDULING_H
 #include <string>
+#include <queue>
+
 using namespace std;
 
 struct Process
@@ -35,4 +37,6 @@ struct Schedule
   void insertProcess(Process *process);
 };
 
+int enqueueArrivals(queue<Process *> *q, int time);
+void updateWaiting(queue<Process *> *q, Process *f, int time);
 #endif

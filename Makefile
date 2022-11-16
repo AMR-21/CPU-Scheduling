@@ -1,2 +1,2 @@
 start:
-	g++ scheduling.cc -o lab4
+	g++ scheduling.cc FCFS.cc -o lab4

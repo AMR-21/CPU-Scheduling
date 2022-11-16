@@ -8,17 +8,17 @@
 #include <vector>
 #include <sstream>
 #include <queue>
-// #include <bits/stdc++.h>
 #include <algorithm>
 #include <string.h>
+#include "FCFS.h"
 
 #define DEFAULT_BUF_LENGTH 20480
 
 using namespace std;
 Schedule *schedule;
-int count = 0;
 vector<Schedule *> schedules;
 queue<Process *> q;
+vector<queue<Process *>> pqueue;
 
 Schedule::Schedule(string mode, string schedulePolicy, int lastInstance, int noOfProcesses)
 {
@@ -42,6 +42,10 @@ Schedule::Schedule(string mode, string schedulePolicy, int lastInstance, int noO
     Schedule::policyName = "SRT";
   else if (schedulePolicy == "5")
     Schedule::policyName = "HRRN";
+  else if (schedulePolicy == "6")
+    Schedule::policyName = "FB-1";
+  else if (schedulePolicy == "7")
+    Schedule::policyName = "FB-2i";
   // ADD POLICY HERE
 
   Schedule::processes = (Process **)
@@ -164,7 +168,7 @@ void printTrace()
     printf("|");
     for (int j = 0; j < schedule->lastInstance; j++)
     {
-      printf("%c", p->activity[j] ? p->activity[j] : ' ');
+      printf("%c", p->activity[j] == '*' || p->activity[j] == '.' ? p->activity[j] : ' ');
       printf("|");
     }
     printf(" ");
@@ -248,14 +252,14 @@ int checkForArrival(int currentTime, int arrival)
   return currentTime == arrival ? 1 : 0;
 }
 
-void updateWaiting(Process *f, int time)
+void updateWaiting(queue<Process *> *q, Process *f, int time)
 {
   // Update activity of ready processes
   queue<Process *> temp;
-  while (!q.empty())
+  while (!q->empty())
   {
-    Process *x = q.front();
-    q.pop();
+    Process *x = q->front();
+    q->pop();
     // Do noting if process is currently active
     if (x == f)
     {
@@ -267,11 +271,23 @@ void updateWaiting(Process *f, int time)
     temp.push(x);
   }
 
-  q = temp;
+  *q = temp;
 }
 
-void enqueueArrivals(int time)
+void updateWaitingFB()
 {
+  for (int j = 0; j < schedule->noOfProcesses; j++)
+  {
+    Process *p = schedule->processes[j];
+    for (int i = p->arrival; i < p->finishTime; i++)
+      if (p->activity[i] != '*')
+        p->activity[i] = '.';
+  }
+}
+
+int enqueueArrivals(queue<Process *> *q, int time)
+{
+  int flag = 0;
   // Enqueue arrivals
   for (int i = 0; i < schedule->noOfProcesses; i++)
   {
@@ -279,45 +295,47 @@ void enqueueArrivals(int time)
     if (checkForArrival(time, p->arrival))
       if (!p->arrived)
       {
+        flag = 1;
         p->arrived = 1;
-        q.push(p);
+        q->push(p);
       }
   }
+  return flag;
 }
 /****************************************/
 /*              ALGORITHMS              */
 /****************************************/
 
-void FCFS()
-{
-  for (int j = 0; j < schedule->lastInstance; j++)
-  {
-    enqueueArrivals(j);
+// void FCFS()
+// {
+//   for (int j = 0; j < schedule->lastInstance; j++)
+//   {
+//     enqueueArrivals(&q, j);
 
-    // Dispatch front
-    Process *f = q.front();
-    if (f)
-    {
-      f->activity[j] = '*';
-      f->service--;
+//     // Dispatch front
+//     Process *f = q.front();
+//     if (f)
+//     {
+//       f->activity[j] = '*';
+//       f->service--;
 
-      // Front finishes service
-      if (!f->service)
-      {
-        f->finishTime = j + 1;
-        q.pop();
-      }
-    }
+//       // Front finishes service
+//       if (!f->service)
+//       {
+//         f->finishTime = j + 1;
+//         q.pop();
+//       }
+//     }
 
-    updateWaiting(f, j);
-  }
-}
+//     updateWaiting(&q, f, j);
+//   }
+// }
 
 void RR()
 {
   for (int j = 0; j < schedule->lastInstance; j++)
   {
-    enqueueArrivals(j);
+    enqueueArrivals(&q, j);
 
     Process *f = q.front();
     if (f)
@@ -332,10 +350,10 @@ void RR()
         q.pop();
       }
 
-      updateWaiting(f, j);
+      updateWaiting(&q, f, j);
 
       // Enqueuing again to stick with given policy of enqueuing
-      enqueueArrivals(j + 1);
+      enqueueArrivals(&q, j + 1);
 
       if (f->service > 0 and !f->quota)
         q.push(f);
@@ -344,7 +362,7 @@ void RR()
         f->finishTime = j + 1;
     }
     else
-      updateWaiting(f, j);
+      updateWaiting(&q, f, j);
   }
 }
 
@@ -352,7 +370,7 @@ void SPN()
 {
   for (int j = 0; j < schedule->lastInstance; j++)
   {
-    enqueueArrivals(j);
+    enqueueArrivals(&q, j);
 
     // Dispatch front
     Process *f = q.front();
@@ -370,7 +388,7 @@ void SPN()
       }
     }
 
-    updateWaiting(f, j);
+    updateWaiting(&q, f, j);
   }
 }
 
@@ -378,7 +396,7 @@ void SRT()
 {
   for (int j = 0; j < schedule->lastInstance; j++)
   {
-    enqueueArrivals(j);
+    enqueueArrivals(&q, j);
     sortSRT();
 
     // Dispatch front
@@ -395,7 +413,7 @@ void SRT()
         q.pop();
       }
     }
-    updateWaiting(f, j);
+    updateWaiting(&q, f, j);
   }
 }
 
@@ -403,7 +421,7 @@ void HRRN()
 {
   for (int j = 0; j < schedule->lastInstance; j++)
   {
-    enqueueArrivals(j);
+    enqueueArrivals(&q, j);
 
     // Dispatch front
     Process *f = q.front();
@@ -421,8 +439,272 @@ void HRRN()
       }
     }
 
-    updateWaiting(f, j);
+    updateWaiting(&q, f, j);
   }
+}
+
+void FB(bool quota)
+{
+  int flag = 0;
+
+  for (int i = 0; i < 5; i++)
+  {
+    queue<Process *> q;
+    pqueue.push_back(q);
+  }
+  int j = 0;
+  for (j = 0; j < schedule->lastInstance; j++)
+  {
+    enqueueArrivals(&pqueue[0], j);
+
+    flag = 0;
+    // Execute all in q0
+    while (!pqueue[0].empty())
+    {
+      Process *p = pqueue[0].front();
+      // if (f->quota == schedule->quota || !f->service)
+      // {
+      //   f->quota = 0;
+      //   q.pop();
+      // }
+      p->activity[j] = '*';
+      p->service--;
+      j++;
+      enqueueArrivals(&pqueue[0], j);
+
+      pqueue[0].pop();
+
+      if (pqueue[0].empty() && pqueue[1].empty() && pqueue[2].empty() && pqueue[3].empty() && pqueue[4].empty())
+      {
+        pqueue[0].push(p);
+      }
+      else
+        // downgrade
+        if (p->service)
+        {
+          pqueue[1].push(p);
+        }
+
+      if (!p->service)
+      {
+        p->finishTime = j + 1;
+      }
+    }
+
+    while (!pqueue[1].empty())
+    {
+      Process *p = pqueue[1].front();
+      p->activity[j] = '*';
+      p->service--;
+      p->quota++;
+
+      if (quota)
+      {
+        while (p->quota < 2 && p->service)
+        {
+          j++;
+          p->activity[j] = '*';
+          p->service--;
+          p->quota++;
+          if (enqueueArrivals(&pqueue[0], j))
+          {
+            flag = 1;
+          }
+        }
+      }
+      p->quota = 0;
+
+      pqueue[1].pop();
+
+      if (p->service)
+      {
+        pqueue[2].push(p);
+      }
+      else
+      {
+        p->finishTime = j + 1;
+      }
+
+      j++;
+
+      if (enqueueArrivals(&pqueue[0], j))
+      {
+        flag = 1;
+        break;
+      }
+      if (flag && quota)
+      {
+        break;
+      }
+    }
+
+    if (flag)
+    {
+      j--;
+      continue;
+    }
+
+    while (!pqueue[2].empty())
+    {
+      Process *p = pqueue[2].front();
+      p->activity[j] = '*';
+      p->service--;
+
+      if (quota)
+      {
+        while (p->quota < 4 && p->service)
+        {
+          j++;
+          p->activity[j] = '*';
+          p->service--;
+          p->quota++;
+          if (enqueueArrivals(&pqueue[0], j))
+          {
+            flag = 1;
+          }
+        }
+      }
+
+      p->quota = 0;
+
+      pqueue[2].pop();
+
+      if (p->service)
+      {
+        pqueue[3].push(p);
+      }
+      else
+      {
+        p->finishTime = j + 1;
+      }
+
+      j++;
+
+      if (enqueueArrivals(&pqueue[0], j))
+      {
+        flag = 1;
+        break;
+      }
+      if (flag && quota)
+      {
+        break;
+      }
+    }
+
+    if (flag)
+    {
+      j--;
+      continue;
+    }
+
+    while (!pqueue[3].empty())
+    {
+      Process *p = pqueue[3].front();
+      p->activity[j] = '*';
+      p->service--;
+
+      if (quota)
+      {
+        while (p->quota < 8 && p->service)
+        {
+          j++;
+          p->activity[j] = '*';
+          p->service--;
+          p->quota++;
+          if (enqueueArrivals(&pqueue[0], j))
+          {
+            flag = 1;
+          }
+        }
+      }
+
+      p->quota = 0;
+
+      pqueue[3].pop();
+
+      if (p->service)
+      {
+        pqueue[4].push(p);
+      }
+      else
+      {
+        p->finishTime = j + 1;
+      }
+
+      j++;
+
+      if (enqueueArrivals(&pqueue[0], j))
+      {
+        flag = 1;
+        break;
+      }
+      if (flag && quota)
+      {
+        break;
+      }
+    }
+
+    if (flag)
+    {
+      j--;
+      continue;
+    }
+
+    while (!pqueue[4].empty())
+    {
+      Process *p = pqueue[4].front();
+      p->activity[j] = '*';
+      p->service--;
+
+      if (quota)
+      {
+        while (p->quota < 16 && p->service)
+        {
+          j++;
+          p->activity[j] = '*';
+          p->service--;
+          p->quota++;
+          if (enqueueArrivals(&pqueue[0], j))
+          {
+            flag = 1;
+          }
+        }
+      }
+
+      p->quota = 0;
+
+      pqueue[4].pop();
+
+      if (p->service)
+      {
+        pqueue[4].push(p);
+      }
+      else
+      {
+        p->finishTime = j + 1;
+      }
+
+      j++;
+
+      if (enqueueArrivals(&pqueue[0], j))
+      {
+        flag = 1;
+        break;
+      }
+
+      if (flag && quota)
+      {
+        break;
+      }
+    }
+
+    if (flag)
+    {
+      j--;
+      continue;
+    }
+  }
+  updateWaitingFB();
 }
 /****************************************/
 /*              ALGORITHMS              */
@@ -545,6 +827,10 @@ int main()
       SRT();
     else if (s->policyName == "HRRN")
       HRRN();
+    else if (s->policyName == "FB-1")
+      FB(false);
+    else if (s->policyName == "FB-2i")
+      FB(true);
 
     // ADD ALGORITHMS ELSE IF HERE
 
