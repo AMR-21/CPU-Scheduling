@@ -10,7 +10,6 @@
 #include <queue>
 #include <algorithm>
 #include <string.h>
-#include "FCFS.h"
 
 #define DEFAULT_BUF_LENGTH 20480
 
@@ -46,6 +45,8 @@ Schedule::Schedule(string mode, string schedulePolicy, int lastInstance, int noO
     Schedule::policyName = "FB-1";
   else if (schedulePolicy == "7")
     Schedule::policyName = "FB-2i";
+  else if (schedulePolicy[0] == '8')
+    Schedule::policyName = "Aging";
   // ADD POLICY HERE
 
   Schedule::processes = (Process **)
@@ -65,6 +66,7 @@ Process::Process(string name, int arrival, int service)
   Process::name = name;
   Process::arrival = arrival;
   Process::service = service;
+  Process::priority = service;
   Process::permService = service;
   Process::arrived = 0;
   Process::quota = 0;
@@ -114,6 +116,11 @@ bool compareService(Process *p1, Process *p2)
   return (p1->service < p2->service);
 }
 
+bool compareP(Process *p1, Process *p2)
+{
+  return (p1->priority > p2->priority);
+}
+
 void sortSRT()
 {
   vector<Process *> procs;
@@ -124,6 +131,21 @@ void sortSRT()
   }
 
   sort(procs.begin(), procs.end(), compareService);
+
+  for (Process *p : procs)
+    q.push(p);
+}
+
+void sortAGING()
+{
+  vector<Process *> procs;
+  while (!q.empty())
+  {
+    procs.push_back(q.front());
+    q.pop();
+  }
+
+  sort(procs.begin(), procs.end(), compareP);
 
   for (Process *p : procs)
     q.push(p);
@@ -306,30 +328,30 @@ int enqueueArrivals(queue<Process *> *q, int time)
 /*              ALGORITHMS              */
 /****************************************/
 
-// void FCFS()
-// {
-//   for (int j = 0; j < schedule->lastInstance; j++)
-//   {
-//     enqueueArrivals(&q, j);
+void FCFS()
+{
+  for (int j = 0; j < schedule->lastInstance; j++)
+  {
+    enqueueArrivals(&q, j);
 
-//     // Dispatch front
-//     Process *f = q.front();
-//     if (f)
-//     {
-//       f->activity[j] = '*';
-//       f->service--;
+    // Dispatch front
+    Process *f = q.front();
+    if (f)
+    {
+      f->activity[j] = '*';
+      f->service--;
 
-//       // Front finishes service
-//       if (!f->service)
-//       {
-//         f->finishTime = j + 1;
-//         q.pop();
-//       }
-//     }
+      // Front finishes service
+      if (!f->service)
+      {
+        f->finishTime = j + 1;
+        q.pop();
+      }
+    }
 
-//     updateWaiting(&q, f, j);
-//   }
-// }
+    updateWaiting(&q, f, j);
+  }
+}
 
 void RR()
 {
@@ -462,11 +484,7 @@ void FB(bool quota)
     while (!pqueue[0].empty())
     {
       Process *p = pqueue[0].front();
-      // if (f->quota == schedule->quota || !f->service)
-      // {
-      //   f->quota = 0;
-      //   q.pop();
-      // }
+
       p->activity[j] = '*';
       p->service--;
       j++;
@@ -706,6 +724,56 @@ void FB(bool quota)
   }
   updateWaitingFB();
 }
+
+void Aging()
+{
+  queue<Process *> temp;
+  Process *f = nullptr;
+  int quantum = 0;
+  for (int j = 0; j < schedule->lastInstance; j++)
+  { // Dispatch front
+    quantum = schedule->quota;
+    if (q.empty())
+    {
+      enqueueArrivals(&q, j);
+      sortAGING();
+    }
+    if (!q.empty())
+    {
+      f = q.front();
+      f->priority = f->service;
+      q.pop();
+      while (j != schedule->lastInstance && quantum > 0)
+      {
+        f->activity[j] = '*';
+        while (!q.empty())
+        {
+          Process *g = q.front();
+          g->priority++;
+          temp.push(g);
+          q.pop();
+        }
+        while (!temp.empty())
+        {
+          Process *h = temp.front();
+          q.push(h);
+          h->activity[j] = '.';
+          temp.pop();
+        }
+        quantum--;
+        j++;
+        enqueueArrivals(&q, j);
+        sortAGING();
+      }
+      j--;
+    }
+    // current process return to intial prority
+    if (f != nullptr)
+    {
+      q.push(f);
+    }
+  }
+}
 /****************************************/
 /*              ALGORITHMS              */
 /****************************************/
@@ -757,6 +825,10 @@ void init()
     if (tokens[1][0] == '2')
       schedule->quota = stoi(tokens[1].substr(2, tokens[1].length() - 1));
 
+    // Aging quota
+    if (tokens[1][0] == '8')
+      schedule->quota = stoi(tokens[1].substr(2, tokens[1].length() - 1));
+
     schedules.push_back(schedule);
   }
 
@@ -786,6 +858,9 @@ void init()
       schedule = new Schedule(tokens[0], policy, stoi(tokens[2]), stoi(tokens[3]));
 
       if (policy[0] == '2')
+        schedule->quota = stoi(policy.substr(2, policy.length() - 1));
+
+      if (policy[0] == '8')
         schedule->quota = stoi(policy.substr(2, policy.length() - 1));
 
       for (int i = 4; i < tokens.size(); i++)
@@ -831,6 +906,8 @@ int main()
       FB(false);
     else if (s->policyName == "FB-2i")
       FB(true);
+    else if (s->policyName == "Aging")
+      Aging();
 
     // ADD ALGORITHMS ELSE IF HERE
 

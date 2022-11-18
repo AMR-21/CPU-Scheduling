@@ -17,6 +17,7 @@ struct Process
   int finishTime;
   int turnAround;
   float normTurn;
+  int priority;
   char *activity;
 
   Process(string name, int arrival, int service);
