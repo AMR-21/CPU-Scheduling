@@ -136,19 +136,9 @@ void sortSRT()
     q.push(p);
 }
 
-void sortAGING()
+void sortAging(vector<Process *> &list)
 {
-  vector<Process *> procs;
-  while (!q.empty())
-  {
-    procs.push_back(q.front());
-    q.pop();
-  }
-
-  sort(procs.begin(), procs.end(), compareP);
-
-  for (Process *p : procs)
-    q.push(p);
+  sort(list.begin(), list.end(), compareP);
 }
 
 bool compareRR(Process *p1, Process *p2)
@@ -320,6 +310,24 @@ int enqueueArrivals(queue<Process *> *q, int time)
         flag = 1;
         p->arrived = 1;
         q->push(p);
+      }
+  }
+  return flag;
+}
+
+int enqueueArrivalsV(vector<Process *> &q, int time)
+{
+  int flag = 0;
+  // Enqueue arrivals
+  for (int i = 0; i < schedule->noOfProcesses; i++)
+  {
+    Process *p = schedule->processes[i];
+    if (checkForArrival(time, p->arrival))
+      if (!p->arrived)
+      {
+        flag = 1;
+        p->arrived = 1;
+        q.push_back(p);
       }
   }
   return flag;
@@ -727,51 +735,50 @@ void FB(bool quota)
 
 void Aging()
 {
-  queue<Process *> temp;
+  vector<Process *> waiting;
+  vector<Process *> active;
   Process *f = nullptr;
   int quantum = 0;
-  for (int j = 0; j < schedule->lastInstance; j++)
+  int j = 0;
+  while (true)
   { // Dispatch front
     quantum = schedule->quota;
-    if (q.empty())
+    enqueueArrivalsV(waiting, j);
+    sortAging(waiting);
+    if ((!waiting.size() == 0) && (active.size() == 0))
     {
-      enqueueArrivals(&q, j);
-      sortAGING();
+
+      active.push_back(waiting[0]);
+      reverse(waiting.begin(), waiting.end());
+      waiting.resize(waiting.size() - 1);
+      reverse(waiting.begin(), waiting.end());
     }
-    if (!q.empty())
+    active[0]->priority = active[0]->service;
+    while (!active.size() == 0)
     {
-      f = q.front();
-      f->priority = f->service;
-      q.pop();
-      while (j != schedule->lastInstance && quantum > 0)
+      while (quantum > 0)
       {
-        f->activity[j] = '*';
-        while (!q.empty())
+        active[0]->activity[j] = '*';
+        for (int i = 0; i < waiting.size(); i++)
         {
-          Process *g = q.front();
-          g->priority++;
-          temp.push(g);
-          q.pop();
+          waiting[i]->activity[j] = '.';
         }
-        while (!temp.empty())
-        {
-          Process *h = temp.front();
-          q.push(h);
-          h->activity[j] = '.';
-          temp.pop();
-        }
-        quantum--;
         j++;
-        enqueueArrivals(&q, j);
-        sortAGING();
+        enqueueArrivalsV(waiting, j);
+        quantum--;
       }
-      j--;
+      if (!quantum)
+      {
+        for (int i = 0; i < waiting.size(); i++)
+        {
+          waiting[i]->priority++;
+        }
+        waiting.push_back(active[0]);
+        active.pop_back();
+      }
     }
-    // current process return to intial prority
-    if (f != nullptr)
-    {
-      q.push(f);
-    }
+    if (j == schedule->lastInstance)
+      break;
   }
 }
 /****************************************/
